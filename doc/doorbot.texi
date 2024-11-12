@@ -1,0 +1,37 @@
+\input texinfo
+@setfilename doorbot.info
+@settitle DoorBot Documentation
+
+@titlepage
+@title DoorBot Documentation
+@subtitle A Mineflayer-based Minecraft Bot
+@author Snowcatman
+@end titlepage
+
+@chapter Overview
+DoorBot is a Minecraft bot built using Mineflayer that specializes in door interactions.
+
+@chapter Features
+@section Movement
+@itemize
+@item Basic movement controls
+@item Pathfinding
+@item Door traversal
+@item other interactions like a jump Bed interaction
+@end itemize
+
+@section Commands
+@table @code
+@item gotobed
+Find and move to nearest bed
+@item gotodoor
+Find and interact with nearest door
+@item come
+Move to player's location
+@item test
+Run test sequence
+@item stop
+Shutdown bot
+@end table
+
+@bye 
