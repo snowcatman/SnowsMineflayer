@@ -1,0 +1,540 @@
+console.log('Bot script starting...')
+
+const mineflayer = require('mineflayer')                             // Import the Mineflayer library for bot creation
+const { pathfinder, Movements, goals: { GoalNear, GoalBlock } } = require('mineflayer-pathfinder')  // Import pathfinding tools
+const { pathfinderdoor } = require('./mineflayer-pathfinderdoor-interact')  // Import our door handling
+const Vec3 = require('vec3')                                         // Import Vec3 for 3D position calculations
+const fs = require('fs')                                             // Import file system for logging
+const path = require('path')                                         // Import path for file path handling
+
+// Constants for goal positions
+const bedGoals = {                                                   // Define bed interaction positions
+    approach: { offset: 1 },                                         // Distance to approach bed from
+    jump: { y: 1.5 },                                               // Height to jump when getting on bed
+    rest: { y: 0.5 }                                                // Final resting height on bed
+}
+
+const doorGoals = {                                                  // Define door interaction positions
+    approach: { offset: 1 },                                         // Distance to approach door from
+    through: { offset: 2 },                                         // Distance to move through door
+    verify: { offset: 3 }                                           // Distance to verify door traversal
+}
+
+function logToFile(message) {                                        // Create logging function
+    const logMessage = `[${new Date().toISOString()}] ${message}\n`  // Format log message with timestamp
+    console.log(message)                                             // Show message in console
+    fs.appendFileSync(path.join('logs', 'bot-latest.log'), logMessage)  // Write message to log file
+}
+
+function startBot() {                                                // Function to handle bot startup sequence
+    logToFile('=== BOT STARTUP SEQUENCE ===')                        // Mark start of bot initialization in log
+    logToFile('Starting countdown before connection attempt...')     // Log that countdown is starting
+    
+    let countdown = 10                                               // Set countdown timer to 10 seconds
+    const timer = setInterval(() => {                               // Create repeating timer
+        logToFile(`Connecting in ${countdown} seconds...`)          // Log remaining time
+        countdown--                                                 // Decrease countdown by 1
+        if (countdown <= 0) {                                      // When countdown reaches zero
+            clearInterval(timer)                                   // Stop the countdown timer
+            createBot()                                           // Start bot creation process
+        }
+    }, 1000)                                                       // Run every 1000ms (1 second)
+}
+
+function createBot() {                                               // Function to create and configure the bot
+    logToFile('Attempting to connect to Minecraft server...')        // Log connection attempt
+    
+    const bot = mineflayer.createBot({                              // Create bot instance with settings
+        host: 'localhost',                                          // Connect to local server
+        username: 'DoorBot_AI',                                     // Bot's username
+        port: 25565,                                               // Default Minecraft server port
+        auth: 'offline',                                           // Run in offline mode
+        version: '1.19.2'                                          // Minecraft version
+    })
+
+    bot.loadPlugin(pathfinder)                                      // Enable pathfinding capabilities
+    bot.loadPlugin(pathfinderdoor)                                 // Enable our custom door handling
+
+    bot.once('spawn', () => {                                      // When bot first spawns in world
+        logToFile('Bot has spawned in the world!')                 // Log spawn event
+        bot.chat('DoorBot_AI is now online and ready!')           // Announce bot is ready in chat
+        const mcData = require('minecraft-data')(bot.version)      // Load Minecraft data for current version
+        const movements = new Movements(bot, mcData)               // Create new movement configuration
+        
+        // Configure movement settings
+        movements.canOpenDoors = true                              // Allow bot to interact with doors
+        movements.allowFreeMotion = true                           // Allow more flexible movement
+        movements.blocksCantBreak = new Set()                      // Create empty set for unbreakable blocks
+        movements.maxDropDown = 1                                  // Limit drop height to 1 block
+        movements.dontCreateFlow = true                            // Prevent liquid flow changes
+        
+        // Prevent breaking any blocks
+        Object.keys(mcData.blocksByName).forEach(blockName => {    // Loop through all block types
+            movements.blocksCantBreak.add(mcData.blocksByName[blockName].id)  // Add each block to unbreakable list
+        })
+        
+        // Additional movement settings
+        movements.allowParkour = false                             // Disable parkour-style movements
+        movements.canWalkOnWater = false                           // Disable walking on water
+        movements.scafoldingBlocks = []                            // Empty list of blocks bot can place
+        
+        // Configure pathfinder settings
+        bot.pathfinder.thinkTimeout = 10000                        // Increase pathfinding timeout
+        bot.pathfinder.tickTimeout = 100                           // Increase per-tick processing time
+        bot.pathfinder.searchRadius = 16                           // Set reasonable search radius
+        
+        bot.pathfinder.setMovements(movements)                     // Apply movement settings to pathfinder
+        logToFile('Pathfinding configuration complete')            // Log that movement config is done
+    })
+
+    async function logCurrentPosition(prefix = 'Current') {
+        const pos = bot.entity.position
+        logToFile(`${prefix} position: x=${pos.x.toFixed(2)}, y=${pos.y.toFixed(2)}, z=${pos.z.toFixed(2)}`)
+        return pos
+    }
+
+    async function findNearestBed() {                               // Function to locate closest bed
+        try {
+            logToFile('=== Find Bed Sequence Start ===')           // Mark start of bed search in log
+            const currentPos = await logCurrentPosition('Bot')      // Get and log bot's current position
+            
+            const bed = bot.findBlock({                            // Search for bed block
+                matching: block => bot.isABed(block),              // Check if block is a bed type
+                maxDistance: 50                                    // Look within 50 blocks
+            })
+            
+            if (bed) {                                             // If bed is found
+                logToFile(`Found bed at: x=${bed.position.x}, y=${bed.position.y}, z=${bed.position.z}`)  // Log bed location
+                const distance = currentPos.distanceTo(bed.position)  // Calculate distance to bed
+                logToFile(`Distance to bed: ${distance.toFixed(2)} blocks`)  // Log distance to bed
+                
+                const pathInfo = {                                  // Create object to store path info
+                    start: {                                       // Starting position
+                        x: currentPos.x.toFixed(2),                // Current x coordinate
+                        y: currentPos.y.toFixed(2),                // Current y coordinate
+                        z: currentPos.z.toFixed(2)                 // Current z coordinate
+                    },
+                    target: {                                      // Target position
+                        x: bed.position.x,                         // Bed x coordinate
+                        y: bed.position.y,                         // Bed y coordinate
+                        z: bed.position.z                          // Bed z coordinate
+                    },
+                    distance: distance.toFixed(2)                  // Distance to target
+                }
+                logToFile(`Path calculation: ${JSON.stringify(pathInfo)}`)  // Log path details
+                return bed                                         // Return found bed
+            }
+            
+            logToFile('No bed found within range')                 // Log if no bed found
+            return null                                           // Return null if no bed found
+        } catch (err) {
+            logToFile(`Error finding bed: ${err.stack || err}`)   // Log any errors
+            return null                                           // Return null on error
+        }
+    }
+
+    async function findNearestDoor() {                            // Function to locate closest door
+        try {
+            logToFile('=== Find Door Sequence Start ===')         // Mark start of door search
+            const currentPos = await logCurrentPosition('Bot')    // Get and log bot's position
+            
+            const door = bot.findBlock({                         // Search for door block
+                matching: block => block.name.includes('door'),   // Check if block is a door type
+                maxDistance: 50                                  // Look within 50 blocks
+            })
+            
+            if (door) {                                          // If door is found
+                logToFile(`Found door at: x=${door.position.x}, y=${door.position.y}, z=${door.position.z}`)  // Log door location
+                const distance = currentPos.distanceTo(door.position)  // Calculate distance to door
+                logToFile(`Distance to door: ${distance.toFixed(2)} blocks`)  // Log distance to door
+                
+                const pathInfo = {
+                    start: {
+                        x: currentPos.x.toFixed(2),
+                        y: currentPos.y.toFixed(2),
+                        z: currentPos.z.toFixed(2)
+                    },
+                    target: {
+                        x: door.position.x,
+                        y: door.position.y,
+                        z: door.position.z
+                    },
+                    distance: distance.toFixed(2)
+                }
+                logToFile(`Path calculation: ${JSON.stringify(pathInfo)}`)
+                return door
+            }
+            
+            logToFile('No door found within range')
+            return null
+        } catch (err) {
+            logToFile(`CRITICAL ERROR in findNearestDoor: ${err.stack || err}`)
+            return null
+        }
+    }
+
+    async function jumpToBed(bed) {                              // Function to jump onto bed
+        try {
+            logToFile('=== Bed Jump Sequence Start ===')         // Mark start of bed jump sequence
+            const startPos = await logCurrentPosition('Starting') // Get and log starting position
+            
+            // Calculate positions using goals
+            const approachPos = bed.position.clone()             // Create copy of bed position
+            const jumpPos = bed.position.offset(0, 1.5, 0)       // Position above bed for jump
+            const restPos = bed.position.offset(0, 0.5, 0)       // Final resting position on bed
+            
+            logToFile(`Bed positions calculated:`)               // Log calculated positions
+            logToFile(`- Approach: ${JSON.stringify(approachPos)}`)  // Log approach position
+            logToFile(`- Jump target: ${JSON.stringify(jumpPos)}`)  // Log jump target position
+            logToFile(`- Rest position: ${JSON.stringify(restPos)}`) // Log rest position
+
+            // First approach the bed
+            await bot.pathfinder.goto(new GoalNear(approachPos.x, approachPos.y, approachPos.z, 1))  // Move near bed
+            await logCurrentPosition('At bed approach')          // Log position near bed
+
+            // Jump sequence
+            bot.setControlState('jump', true)
+            logToFile('Jump started')
+
+            // Track positions during jump
+            let maxHeight = bot.entity.position.y
+            const jumpInterval = setInterval(async () => {
+                const currentY = bot.entity.position.y
+                if (currentY > maxHeight) {
+                    maxHeight = currentY
+                    await logCurrentPosition('Jump height')
+                }
+            }, 50)
+
+            // Move to rest position
+            await bot.pathfinder.goto(new GoalNear(restPos.x, restPos.y, restPos.z, 0.5))
+            clearInterval(jumpInterval)
+            bot.setControlState('jump', false)
+            
+            await logCurrentPosition('Final rest')
+            return true
+        } catch (err) {
+            logToFile(`CRITICAL ERROR in jumpToBed: ${err.stack || err}`)
+            bot.setControlState('jump', false)
+            return false
+        }
+    }
+
+    async function traverseDoor(door) {                            // Function to handle door traversal
+        try {
+            logToFile('=== Door Sequence Start ===')              // Mark start of door sequence
+            const startPos = await logCurrentPosition('Starting')  // Get and log starting position
+            
+            // Get door properties
+            const blockData = door.getProperties()                // Get door's current state
+            logToFile(`Door data: ${JSON.stringify(blockData)}`)  // Log door properties
+            
+            // Calculate positions using goals
+            const approachPos = door.position.clone()             // Create copy of door position for approach
+            const throughPos = door.position.clone()              // Create copy for through-door position
+            const verifyPos = door.position.clone()               // Create copy for verification position
+
+            // Adjust positions based on door facing
+            if (blockData.facing === 'north') {                   // If door faces north
+                approachPos.z += doorGoals.approach.offset        // Approach from south
+                throughPos.z -= doorGoals.through.offset          // Move through to north
+                verifyPos.z -= doorGoals.verify.offset           // Verify position north of door
+            } else if (blockData.facing === 'south') {           // If door faces south
+                approachPos.z -= doorGoals.approach.offset        // Approach from north
+                throughPos.z += doorGoals.through.offset          // Move through to south
+                verifyPos.z += doorGoals.verify.offset           // Verify position south of door
+            }
+
+            logToFile(`Door positions calculated:`)
+            logToFile(`- Approach: ${JSON.stringify(approachPos)}`)
+            logToFile(`- Through: ${JSON.stringify(throughPos)}`)
+            logToFile(`- Verify: ${JSON.stringify(verifyPos)}`)
+
+            // Execute movement sequence
+            await bot.pathfinder.goto(new GoalNear(approachPos.x, approachPos.y, approachPos.z, 0.5))
+            await logCurrentPosition('At door approach')
+
+            await bot.activateBlock(door)
+            await new Promise(resolve => setTimeout(resolve, 500))
+            logToFile('Door activated')
+
+            await bot.pathfinder.goto(new GoalNear(throughPos.x, throughPos.y, throughPos.z, 0.5))
+            await logCurrentPosition('Through door')
+
+            await bot.pathfinder.goto(new GoalNear(verifyPos.x, verifyPos.y, verifyPos.z, 0.5))
+            const endPos = await logCurrentPosition('Final position')
+
+            logToFile(`Distance moved: ${startPos.distanceTo(endPos).toFixed(2)} blocks`)
+            return true
+        } catch (err) {
+            logToFile(`CRITICAL ERROR in traverseDoor: ${err.stack || err}`)
+            return false
+        }
+    }
+
+    async function comeToPlayer(username) {                        // Function to make bot come to player
+        try {
+            logToFile('=== Come To Player Sequence Start ===')    // Mark start of come sequence
+            const startPos = await logCurrentPosition('Starting')  // Get and log starting position
+            
+            const player = bot.players[username]                  // Get player object
+            if (!player || !player.entity) {                      // Check if player is visible
+                logToFile('Player not found or not visible')      // Log if player not found
+                bot.chat("I can't see you!")                     // Tell player bot can't see them
+                return false                                      // Return failure
+            }
+            
+            const playerPos = player.entity.position              // Get player's position
+            logToFile(`Player position: x=${playerPos.x.toFixed(2)}, y=${playerPos.y.toFixed(2)}, z=${playerPos.z.toFixed(2)}`)  // Log player position
+            logToFile(`Distance to player: ${startPos.distanceTo(playerPos).toFixed(2)} blocks`)  // Log distance to player
+            
+            bot.chat('Coming to you!')                           // Tell player bot is coming
+            await bot.pathfinder.goto(new GoalNear(playerPos.x, playerPos.y, playerPos.z, 1))  // Move to player
+            
+            const endPos = await logCurrentPosition('Final position')  // Get and log final position
+            const finalDistance = endPos.distanceTo(playerPos)    // Calculate final distance to player
+            logToFile(`Final distance to player: ${finalDistance.toFixed(2)} blocks`)  // Log final distance
+            
+            if (finalDistance <= 2) {                            // If close enough to player
+                bot.chat('Reached you!')                         // Tell player bot arrived
+                return true                                      // Return success
+            } else {
+                bot.chat('Having trouble reaching you!')         // Tell player if can't reach
+                return false                                     // Return failure
+            }
+        } catch (err) {
+            logToFile(`CRITICAL ERROR in comeToPlayer: ${err.stack || err}`)  // Log any errors
+            bot.chat('Sorry, something went wrong!')            // Tell player about error
+            return false                                        // Return failure
+        }
+    }
+
+    async function nudgeMove(direction, distance = 0.5) {         // Function for small movements
+        try {
+            logToFile(`=== Nudge Movement: ${direction} ===`)    // Mark start of nudge movement
+            const startPos = await logCurrentPosition('Starting') // Get and log starting position
+            
+            let dx = 0, dz = 0                                  // Initialize movement variables
+            switch(direction) {                                 // Calculate movement direction
+                case 'forward': dz = -distance; break;          // Move forward (north)
+                case 'back': dz = distance; break;              // Move back (south)
+                case 'left': dx = -distance; break;             // Move left (west)
+                case 'right': dx = distance; break;             // Move right (east)
+            }
+            
+            const targetPos = startPos.offset(dx, 0, dz)
+            logToFile(`Target position: x=${targetPos.x.toFixed(2)}, y=${targetPos.y.toFixed(2)}, z=${targetPos.z.toFixed(2)}`)
+            
+            await bot.pathfinder.goto(new GoalNear(targetPos.x, targetPos.y, targetPos.z, 0.1))
+            const endPos = await logCurrentPosition('Final position')
+            
+            logToFile(`Distance moved: ${startPos.distanceTo(endPos).toFixed(2)} blocks`)
+            return true
+        } catch (err) {
+            logToFile(`CRITICAL ERROR in nudgeMove: ${err.stack || err}`)
+            return false
+        }
+    }
+
+    // Add this function to check if block is a bed
+    async function findAndJumpOnBed() {
+        logToFile('=== Find and Jump On Bed Sequence Start ===')
+        const startPos = await logCurrentPosition('Starting')
+        
+        // Step 1: Find bed and get close with a more lenient goal
+        const bed = bot.findBlock({
+            matching: block => bot.isABed(block),
+            maxDistance: 50
+        })
+
+        if (!bed) {
+            logToFile('No bed found within 50 blocks')
+            bot.chat("Can't find any beds!")
+            return false
+        }
+
+        logToFile(`Found bed at: x=${bed.position.x}, y=${bed.position.y}, z=${bed.position.z}`)
+        logToFile(`Initial distance to bed: ${startPos.distanceTo(bed.position).toFixed(2)} blocks`)
+
+        try {
+            // Use GoalNear with a more forgiving range (2-3 blocks)
+            bot.chat('Moving closer to bed...')
+            await bot.pathfinder.goto(new GoalNear(bed.position.x, bed.position.y, bed.position.z, 2))
+            const nearPos = await logCurrentPosition('Near bed position')
+            
+            // If we're close enough, start jump sequence
+            if (nearPos.distanceTo(bed.position) <= 3) {
+                bot.chat('Getting on bed...')
+                // Just jump, don't try to pathfind up
+                bot.setControlState('jump', true)
+                await new Promise(resolve => setTimeout(resolve, 500))
+                bot.setControlState('jump', false)
+                
+                const finalPos = await logCurrentPosition('Final position')
+                logToFile(`Final distance to bed center: ${finalPos.distanceTo(bed.position).toFixed(2)} blocks`)
+                return true
+            } else {
+                logToFile('Not close enough to attempt jumping on bed')
+                bot.chat("Can't get close enough to bed!")
+                return false
+            }
+        } catch (err) {
+            logToFile(`Error during bed sequence: ${err.message}`)
+            bot.setControlState('jump', false)
+            bot.chat('Had trouble with the bed!')
+            return false
+        }
+    }
+
+    async function jumpCommand(seconds = 3) {                        // Function to make bot jump for specified time
+        try {
+            logToFile('=== Jump Sequence Start ===')                // Mark start of jump sequence in log
+            logPosition(bot, 'Before jump')                         // Log position before jumping
+            bot.setControlState('jump', true)                       // Start jumping
+            await new Promise(resolve => setTimeout(resolve, seconds * 1000))  // Wait for specified seconds
+            bot.setControlState('jump', false)                      // Stop jumping
+            logPosition(bot, 'After jump')                          // Log position after jumping
+            logToFile('=== Jump Sequence Complete ===')             // Mark end of jump sequence
+        } catch (err) {
+            logToFile(`ERROR in jumpCommand: ${err.stack || err}`)  // Log any errors that occur
+            bot.setControlState('jump', false)                      // Ensure jump is turned off if error occurs
+        }
+    }
+
+    async function bedCommand() {                                    // Function to handle bed interaction
+        try {
+            logToFile('=== Bed Sequence Start ===')                 // Mark start of bed sequence
+            logPosition(bot, 'Starting position')                    // Log starting position
+            
+            const bed = bot.findBlock({                             // Search for nearest bed
+                matching: block => bot.isABed(block),               // Check if block is a bed
+                maxDistance: 50                                     // Search up to 50 blocks away
+            })
+
+        if (!bed) {                                               // If no bed found
+            logToFile('No bed found within range')                // Log failure
+            bot.chat("Can't find any beds!")                     // Inform player
+            return false                                          // Return failure
+        }
+
+        logToFile(`Found bed at: x=${bed.position.x}, y=${bed.position.y}, z=${bed.position.z}`)  // Log bed location
+        logToFile(`Initial distance to bed: ${startPos.distanceTo(bed.position).toFixed(2)} blocks`)  // Log distance
+
+            try {
+                // Use GoalNear with a more forgiving range (2-3 blocks)
+                bot.chat('Moving closer to bed...')
+                await bot.pathfinder.goto(new GoalNear(bed.position.x, bed.position.y, bed.position.z, 2))
+                const nearPos = await logCurrentPosition('Near bed position')
+                
+                // If we're close enough, start jump sequence
+                if (nearPos.distanceTo(bed.position) <= 3) {
+                    bot.chat('Getting on bed...')
+                    // Just jump, don't try to pathfind up
+                    bot.setControlState('jump', true)
+                    await new Promise(resolve => setTimeout(resolve, 500))
+                    bot.setControlState('jump', false)
+                    
+                    const finalPos = await logCurrentPosition('Final position')
+                    logToFile(`Final distance to bed center: ${finalPos.distanceTo(bed.position).toFixed(2)} blocks`)
+                    return true
+                } else {
+                    logToFile('Not close enough to attempt jumping on bed')
+                    bot.chat("Can't get close enough to bed!")
+                    return false
+                }
+            } catch (err) {
+                logToFile(`Error during bed sequence: ${err.message}`)
+                bot.setControlState('jump', false)
+                bot.chat('Had trouble with the bed!')
+                return false
+            }
+        } catch (err) {
+            logToFile(`ERROR in bedCommand: ${err.stack || err}`)  // Log any errors that occur
+            bot.setControlState('jump', false)                      // Ensure jump is turned off if error occurs
+            return false
+        }
+    }
+
+    // Chat command handler
+    bot.on('chat', async (username, message) => {                 // Handle chat messages
+        if (username === bot.username) return                     // Ignore bot's own messages
+        logToFile(`Chat command received: ${message} from ${username}`)  // Log received command
+
+        try {
+            switch(message) {                                     // Process different commands
+                case 'jump':                                      // Jump command
+                    await jumpCommand()                           // Execute jump
+                    break
+
+                case 'gotobed':                                   // Go to bed command
+                    await findAndJumpOnBed()                      // Find and get on bed
+                    break
+
+                case 'gotodoor':                                  // If gotodoor command
+                    const door = await findNearestDoor()          // Find nearest door
+                    if (door) {                                   // If door found
+                        await traverseDoor(door)                  // Try to traverse door
+                    }
+                    break
+
+                case 'come':                                      // If come command
+                    await comeToPlayer(username)                  // Move to player
+                    break
+
+                case 'test':                                      // Test sequence command
+                    try {
+                        bot.chat('Starting test sequence')        // Announce test start
+                        if (await findAndJumpOnBed()) {           // Try to find and get on bed
+                            await jumpCommand()                   // Jump if on bed
+                            const door = await findNearestDoor()  // Find nearest door
+                            if (door) {                           // If door found
+                                await traverseDoor(door)          // Try to traverse door
+                            }
+                        }
+                        bot.chat('Test complete!')                // Announce test completion
+                    } catch (err) {
+                        logToFile(`Error during test: ${err.stack || err}`)  // Log test errors
+                        bot.chat('Error during test')             // Inform player of error
+                    }
+                    break
+
+                case 'a': await nudgeMove('forward'); break;
+                case 's': await nudgeMove('back'); break;
+                case 'e': await nudgeMove('right'); break;
+                case 'w': await nudgeMove('left'); break;
+                case 'as': await nudgeMove('forward', 0.25); break;
+                case 'ss': await nudgeMove('back', 0.25); break;
+                case 'es': await nudgeMove('right', 0.25); break;
+                case 'ws': await nudgeMove('left', 0.25); break;
+
+                case 'stop':
+                    bot.chat('Shutting down!')
+                    logToFile('Shutdown command received')
+                    setTimeout(() => {
+                        bot.end()
+                        process.exit(0)
+                    }, 1000)
+                    break
+            }
+        } catch (err) {
+            logToFile(`CRITICAL ERROR in command handler: ${err.stack || err}`)  // Log command errors
+            bot.chat('Sorry, something went wrong!')             // Inform player of error
+        }
+    })
+
+    bot.on('login', () => {                                         // When bot successfully logs into server
+        logToFile('Successfully logged into server!')               // Log successful login
+    })
+
+    bot.on('error', (err) => {                                     // If bot encounters an error
+        logToFile(`Connection error: ${err.message}`)              // Log the error message
+        setTimeout(startBot, 5000)                                 // Try to restart bot after 5 seconds
+    })
+
+    bot.on('end', () => {                                          // If bot's connection ends
+        logToFile('Connection ended - attempting to reconnect...')  // Log reconnection attempt
+        setTimeout(startBot, 5000)                                 // Try to restart bot after 5 seconds
+    })
+}
+
+startBot()                                                        // Start the bot with countdown
