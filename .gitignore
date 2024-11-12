@@ -1,0 +1,15 @@
+# Development folders
+examples/
+.vscode/
+node_modules/
+logs/
+spigotmc-buildtools/
+
+# Project specific
+AI/
+bot info needs.txt
+minecraft-server/
+*-backup.js
+
+# Logs
+*.log 
