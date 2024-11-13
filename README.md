@@ -1,20 +1,35 @@
-# SnowsMinelflayer
+# Mineflayer Door Navigation Bot
 
-A Minecraft bot using Mineflayer for automated door and jumping onbed interactions. This project aims to develop a bot that can navigate through doors, and interact in other block like the bed blocks, and eventually expand into farming capabilities.
+A Minecraft bot that can intelligently navigate through doors using Mineflayer.
 
 ## Features
-- Door interaction and traversal
-- Bed finding and usage
-- Basic movement commands
-- Position logging
-- Error handling
+- Door state detection and interaction
+- Manual and automatic door traversal
+- Detailed logging system
+- Pathfinding integration
+- Command system for testing
 
-## Requirements
-- Node.js
-- Minecraft server (tested with version 1.19.2)
-- Mineflayer
+## Commands
+- `gotodoor` - Move to and test door interaction
+- `gothroughdoor` - Navigate through door using pathfinder
+- `gothroughdoormanual` - Manual step-by-step door traversal
+- (Add other commands here)
 
-## Installation steps
-1. Install Node.js
-2. Install Mineflayer
-3. Run the bot
+## Installation
+```bash
+npm install
+```
+
+## Usage
+```bash
+node door-bot.js
+```
+
+## Configuration
+(Add configuration details here)
+
+## Development Status
+(Add current development status here)
+
+## Contributing
+(Add contribution guidelines here)
