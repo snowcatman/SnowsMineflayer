@@ -178,7 +178,7 @@ function inject(bot) {
         }
     })
 
-    // Monitor ALL door state changes
+    // Monitor ALL door state changes with enhanced tracking
     bot.on('blockUpdate', (oldBlock, newBlock) => {
         if (oldBlock?.name?.includes('door') || newBlock?.name?.includes('door')) {
             logToFile('=== Door State Change Event ===', 'DETECTION')
@@ -186,44 +186,476 @@ function inject(bot) {
             // Get current time for timing reference
             const timestamp = new Date().toISOString()
             
-            // Log all nearby entities with more detail
+            // Track who initiated the change
+            const initiator = {
+                type: 'unknown',
+                name: 'unknown',
+                distance: null
+            }
+            
+            // Check nearby entities for potential initiators
             const nearbyEntities = Object.values(bot.entities)
-            logToFile('Entities at time of door state change:', 'DETECTION')
+            const doorPos = newBlock ? newBlock.position : oldBlock.position
+            
             nearbyEntities.forEach(entity => {
-                if (newBlock) {
-                    const distance = entity.position.distanceTo(newBlock.position)
-                    logToFile(`Entity: ${entity.name || entity.username || 'unknown'}`, 'DETECTION')
-                    logToFile(`Type: ${entity.type}`, 'DETECTION')
-                    logToFile(`Distance: ${distance.toFixed(2)} blocks`, 'DETECTION')
-                    logToFile(`Position: x=${entity.position.x.toFixed(2)}, y=${entity.position.y.toFixed(2)}, z=${entity.position.z.toFixed(2)}`, 'DETECTION')
+                const distance = entity.position.distanceTo(doorPos)
+                if (distance < 4) {  // Within interaction range
+                    if (entity === bot.entity) {
+                        initiator.type = 'bot'
+                        initiator.name = bot.username
+                        initiator.distance = distance
+                    } else if (entity.type === 'player') {
+                        initiator.type = 'player'
+                        initiator.name = entity.username || entity.name
+                        initiator.distance = distance
+                    }
                 }
+                logToFile(`Nearby entity: ${entity.name || entity.username || 'unknown'} at ${distance.toFixed(2)} blocks`, 'DETECTION')
             })
             
-            // Log detailed door state changes
+            // Log detailed state changes
             if (oldBlock?.name?.includes('door')) {
                 const oldProps = oldBlock.getProperties()
-                logToFile('Previous door state:', 'DETECTION')
+                logToFile('Previous state:', 'DETECTION')
                 logToFile(`Time: ${timestamp}`, 'DETECTION')
                 logToFile(`Position: x=${oldBlock.position.x}, y=${oldBlock.position.y}, z=${oldBlock.position.z}`, 'DETECTION')
                 logToFile(`Type: ${oldBlock.name}`, 'DETECTION')
-                logToFile(`Properties: ${JSON.stringify(oldProps)}`, 'DETECTION')
+                logToFile(`Open: ${oldProps.open}`, 'DETECTION')
+                logToFile(`Facing: ${oldProps.facing}`, 'DETECTION')
             }
             
             if (newBlock?.name?.includes('door')) {
                 const newProps = newBlock.getProperties()
-                logToFile('New door state:', 'DETECTION')
+                logToFile('New state:', 'DETECTION')
                 logToFile(`Time: ${timestamp}`, 'DETECTION')
                 logToFile(`Position: x=${newBlock.position.x}, y=${newBlock.position.y}, z=${newBlock.position.z}`, 'DETECTION')
                 logToFile(`Type: ${newBlock.name}`, 'DETECTION')
-                logToFile(`Properties: ${JSON.stringify(newProps)}`, 'DETECTION')
+                logToFile(`Open: ${newProps.open}`, 'DETECTION')
+                logToFile(`Facing: ${newProps.facing}`, 'DETECTION')
             }
 
-            // Log if this was a bot interaction or external
-            const botDistance = bot.entity.position.distanceTo(newBlock.position)
-            logToFile(`Bot distance to door: ${botDistance.toFixed(2)} blocks`, 'DETECTION')
-            logToFile(`Interaction likely by: ${botDistance <= 4 ? 'bot' : 'other entity'}`, 'DETECTION')
-
+            // Log who likely interacted with the door
+            logToFile(`Interaction initiated by: ${initiator.type} (${initiator.name}) at distance ${initiator.distance?.toFixed(2) || 'unknown'}`, 'DETECTION')
             logToFile('=== End Door State Change Event ===', 'DETECTION')
+        }
+    })
+
+    // Add new door movement function
+    function addDoorMovements(movements) {
+        // Store original getMoveForward
+        const originalGetMoveForward = movements.getMoveForward
+
+        // Override getMoveForward to handle doors
+        movements.getMoveForward = function(node, dir, neighbors) {
+            const blockC = this.getBlock(node, dir.x, 0, dir.z)
+            
+            // If block is a door, use manual traversal sequence
+            if (blockC.name && blockC.name.includes('door')) {
+                logToFile('=== Door Movement Sequence Start ===', 'MOVEMENT')
+                
+                // Calculate approach position
+                const approachPos = {
+                    x: node.x + (dir.x * 2),  // 2 blocks away
+                    y: node.y,
+                    z: node.z + (dir.z * 2)
+                }
+                
+                // Add movement sequence
+                neighbors.push({
+                    x: approachPos.x,
+                    y: approachPos.y,
+                    z: approachPos.z,
+                    remainingBlocks: node.remainingBlocks,
+                    cost: 1,  // Base movement cost
+                    toBreak: [],
+                    toPlace: [],
+                    returnPos: node.pos,  // Store original position
+                    isDoorSequence: true,  // Mark as door sequence
+                    doorBlock: blockC     // Store door reference
+                })
+                
+                logToFile('Added door movement sequence', 'MOVEMENT')
+                return
+            }
+            
+            // Use original movement for non-door blocks
+            return originalGetMoveForward.call(this, node, dir, neighbors)
+        }
+
+        // Add door sequence handler
+        movements.handleDoorSequence = async function(node) {
+            if (!node.isDoorSequence) return false
+            
+            try {
+                logToFile('Executing door movement sequence', 'MOVEMENT')
+                
+                // Step 1: Approach door
+                await this.bot.lookAt(node.doorBlock.position)
+                
+                // Step 2: Open door
+                await this.bot.activateBlock(node.doorBlock)
+                
+                // Step 3: Move through
+                await this.bot.setControlState('forward', true)
+                await new Promise(resolve => setTimeout(resolve, 1000))
+                await this.bot.setControlState('forward', false)
+                
+                logToFile('Door sequence complete', 'SUCCESS')
+                return true
+            } catch (err) {
+                logToFile(`Door sequence failed: ${err.message}`, 'ERROR')
+                return false
+            }
+        }
+    }
+
+    // Add pathfinding integration
+    function addDoorPathfinding(movements) {
+        // Store original getMoveForward
+        const originalGetMoveForward = movements.getMoveForward
+
+        movements.getMoveForward = function(node, dir, neighbors) {
+            const blockC = this.getBlock(node, dir.x, 0, dir.z)
+            
+            // If block is a door, handle door traversal
+            if (blockC.name && blockC.name.includes('door')) {
+                logToFile('Found door in path', 'PATHFINDING')
+                
+                // Check door state
+                const doorState = blockC.getProperties()
+                const doorPos = blockC.position
+                
+                // Calculate approach position
+                const approachPos = {
+                    x: node.x,
+                    y: node.y,
+                    z: node.z
+                }
+                
+                // Calculate through position
+                const throughPos = {
+                    x: node.x + (dir.x * 2),
+                    y: node.y,
+                    z: node.z + (dir.z * 2)
+                }
+                
+                // Add door traversal sequence
+                neighbors.push({
+                    x: throughPos.x,
+                    y: throughPos.y,
+                    z: throughPos.z,
+                    remainingBlocks: node.remainingBlocks,
+                    cost: 2,  // Higher cost for door traversal
+                    toBreak: [],
+                    toPlace: [],
+                    isDoorMove: true,
+                    doorBlock: blockC,
+                    approachPos: approachPos
+                })
+                
+                logToFile('Added door traversal to path options', 'PATHFINDING')
+                return
+            }
+            
+            // Use original movement for non-door blocks
+            return originalGetMoveForward.call(this, node, dir, neighbors)
+        }
+
+        // Add door movement handler
+        movements.handleDoorMove = async function(node) {
+            if (!node.isDoorMove) return false
+            
+            try {
+                // 1. Move to approach position
+                await bot.lookAt(node.doorBlock.position)
+                
+                // 2. Check and handle door state
+                const doorState = node.doorBlock.getProperties()
+                if (doorState.open === 'false') {
+                    await bot.activateBlock(node.doorBlock)
+                    await new Promise(resolve => setTimeout(resolve, 500))
+                }
+                
+                // 3. Move through while facing forward
+                await bot.lookAt(new Vec3(node.x, node.y, node.z))
+                await bot.pathfinder.goto(new goals.GoalNear(node.x, node.y, node.z, 1))
+                
+                return true
+            } catch (err) {
+                logToFile(`Door movement failed: ${err.message}`, 'ERROR')
+                return false
+            }
+        }
+    }
+
+    // Apply door pathfinding to bot's movements
+    const movements = new Movements(bot)
+    addDoorPathfinding(movements)
+    bot.pathfinder.setMovements(movements)
+
+    // Add door commands to bot
+    bot.doorCommands = {
+        gotodoor: async function() {
+            const door = bot.findBlock({
+                matching: block => block.name.includes('door'),
+                maxDistance: 50
+            })
+            
+            if (!door) {
+                bot.chat("I can't find any doors nearby!")
+                return
+            }
+            
+            bot.chat('I found a door! Moving to interact...')
+            try {
+                // Get initial door state
+                const initialProps = door.getProperties()
+                logToFile('=== Door Test Sequence Start ===', 'INFO')
+                logToFile(`Initial door state: ${JSON.stringify(initialProps)}`, 'INFO')
+                
+                // Move to door first
+                const movements = new Movements(bot)
+                movements.canDig = false
+                movements.digCost = Infinity
+                movements.canOpenDoors = true
+                bot.pathfinder.setMovements(movements)
+                
+                // Calculate approach position
+                const pos = door.position
+                const approachPos = new Vec3(pos.x + 1, pos.y, pos.z)  // Start with east side
+                
+                // Move to position
+                await bot.pathfinder.goto(new GoalNear(approachPos.x, approachPos.y, approachPos.z, 1))
+                bot.chat('Starting door interaction test...')
+                
+                // Start door interaction cycle
+                let cycleCount = 0
+                const doorInterval = setInterval(async () => {
+                    if (cycleCount >= 5) {
+                        clearInterval(doorInterval)
+                        logToFile('Door interaction test complete', 'INFO')
+                        bot.chat('Door testing complete!')
+                        return
+                    }
+                    
+                    try {
+                        // Log current state
+                        const currentProps = door.getProperties()
+                        logToFile(`Cycle ${cycleCount + 1}: Current state: ${JSON.stringify(currentProps)}`, 'INFO')
+                        
+                        // Interact with door
+                        await bot.activateBlock(door)
+                        logToFile(`Cycle ${cycleCount + 1}: Door activated`, 'INTERACTION')
+                        
+                        // Wait 1 second then close
+                        setTimeout(async () => {
+                            await bot.activateBlock(door)
+                            logToFile(`Cycle ${cycleCount + 1}: Door toggled`, 'INTERACTION')
+                        }, 1000)
+                        
+                        cycleCount++
+                    } catch (err) {
+                        logToFile(`Error in cycle ${cycleCount}: ${err.message}`, 'ERROR')
+                    }
+                }, 2000)
+                
+            } catch (err) {
+                bot.chat("I had trouble with the door!")
+                logToFile(`Door test error: ${err.message}`, 'ERROR')
+                bot.pathfinder.stop()
+            }
+        },
+        
+        gothroughdoor: async function() {
+            const door = bot.findBlock({
+                matching: block => block.name.includes('door'),
+                maxDistance: 50
+            })
+            
+            if (!door) {
+                bot.chat("I can't find any doors nearby!")
+                return
+            }
+            
+            bot.chat('I found a door! Moving through it...')
+            logToFile('=== Door Traversal Start ===', 'MOVEMENT')
+            
+            try {
+                // Log initial state
+                const initialProps = door.getProperties()
+                logToFile(`Initial door state: ${JSON.stringify(initialProps)}`, 'INFO')
+                logToFile(`Initial bot position: x=${bot.entity.position.x.toFixed(2)}, y=${bot.entity.position.y.toFixed(2)}, z=${bot.entity.position.z.toFixed(2)}`, 'MOVEMENT')
+                
+                // Configure movements
+                const movements = new Movements(bot)
+                movements.canDig = false
+                movements.digCost = Infinity
+                movements.canOpenDoors = true
+                movements.allowFreeMotion = false
+                bot.pathfinder.setMovements(movements)
+                
+                // Calculate approach position based on door facing
+                const doorPos = door.position
+                const facing = initialProps.facing
+                
+                // Calculate positions on both sides of door
+                const positions = {
+                    north: new Vec3(doorPos.x, doorPos.y, doorPos.z - 1),
+                    south: new Vec3(doorPos.x, doorPos.y, doorPos.z + 1),
+                    east: new Vec3(doorPos.x + 1, doorPos.y, doorPos.z),
+                    west: new Vec3(doorPos.x - 1, doorPos.y, doorPos.z)
+                }
+                
+                // Find closest valid approach position
+                const botPos = bot.entity.position
+                let bestDistance = Infinity
+                let approachPos
+                
+                Object.entries(positions).forEach(([dir, pos]) => {
+                    const distance = botPos.distanceTo(pos)
+                    logToFile(`Distance to ${dir} approach: ${distance.toFixed(2)}`, 'MOVEMENT')
+                    if (distance < bestDistance) {
+                        bestDistance = distance
+                        approachPos = pos
+                    }
+                })
+                
+                // Move to approach position and face door
+                logToFile(`Moving to approach position: x=${approachPos.x}, y=${approachPos.y}, z=${approachPos.z}`, 'MOVEMENT')
+                await bot.pathfinder.goto(new goals.GoalNear(approachPos.x, approachPos.y, approachPos.z, 1))
+                await bot.lookAt(doorPos, true)  // true parameter ensures bot looks at exact position
+                logToFile('Positioned and facing door', 'MOVEMENT')
+                
+                // Check door state before interacting
+                const doorState = door.getProperties()
+                if (doorState.open === 'false') {  // Only open if explicitly closed
+                    logToFile('Door is closed, opening...', 'INTERACTION')
+                    await bot.activateBlock(door)
+                    await new Promise(resolve => setTimeout(resolve, 500))  // Wait for door animation
+                    
+                    // Verify door opened
+                    const newState = door.getProperties()
+                    if (newState.open === 'false') {
+                        logToFile('Door failed to open!', 'ERROR')
+                        bot.chat("The door didn't open!")
+                        return
+                    }
+                } else {
+                    logToFile('Door is already open, proceeding through', 'INTERACTION')
+                }
+                
+                // Calculate position on other side of door
+                const throughPos = new Vec3(
+                    doorPos.x + (facing === 'east' ? 2 : facing === 'west' ? -2 : 0),
+                    doorPos.y,
+                    doorPos.z + (facing === 'south' ? 2 : facing === 'north' ? -2 : 0)
+                )
+                
+                // Move through doorway while maintaining forward orientation
+                logToFile('Moving through doorway...', 'MOVEMENT')
+                await bot.lookAt(throughPos, true)  // Look where we're going
+                await bot.pathfinder.goto(new goals.GoalNear(throughPos.x, throughPos.y, throughPos.z, 1))
+                
+                // Log final position
+                logToFile(`Final position: x=${bot.entity.position.x.toFixed(2)}, y=${bot.entity.position.y.toFixed(2)}, z=${bot.entity.position.z.toFixed(2)}`, 'MOVEMENT')
+                logToFile('=== Door Traversal Complete ===', 'SUCCESS')
+                bot.chat('Made it through the door!')
+                
+            } catch (err) {
+                bot.chat("I had trouble with the door!")
+                logToFile(`Door traversal error: ${err.message}`, 'ERROR')
+                logToFile(`Error stack: ${err.stack}`, 'ERROR')
+                bot.pathfinder.stop()
+                bot.clearControlStates()
+            }
+        },
+        
+        gothroughdoormanual: async function() {
+            const door = bot.findBlock({
+                matching: block => block.name.includes('door'),
+                maxDistance: 50
+            })
+            
+            if (!door) {
+                bot.chat("I can't find any doors nearby!")
+                return
+            }
+            
+            bot.chat('Found door! Starting manual traversal sequence...')
+            logToFile('=== Manual Door Traversal Start ===', 'MOVEMENT')
+            
+            try {
+                // Log initial positions
+                logToFile(`Initial bot position: x=${bot.entity.position.x.toFixed(2)}, y=${bot.entity.position.y.toFixed(2)}, z=${bot.entity.position.z.toFixed(2)}`, 'MOVEMENT')
+                logToFile(`Door position: x=${door.position.x}, y=${door.position.y}, z=${door.position.z}`, 'MOVEMENT')
+                logToFile(`Initial door state: ${JSON.stringify(door.getProperties())}`, 'STATE')
+                
+                // Step 1: Initial approach
+                logToFile('Step 1: Moving to initial door position', 'MOVEMENT')
+                await bot.pathfinder.goto(new goals.GoalNear(door.position.x, door.position.y, door.position.z, 2))
+                logToFile(`Approach position: x=${bot.entity.position.x.toFixed(2)}, y=${bot.entity.position.y.toFixed(2)}, z=${bot.entity.position.z.toFixed(2)}`, 'MOVEMENT')
+                
+                // Step 2: Turn 180°
+                bot.chat('Turning around...')
+                logToFile('Step 2: Turning 180 degrees', 'MOVEMENT')
+                const initialYaw = bot.entity.yaw
+                await bot.look(initialYaw + Math.PI, bot.entity.pitch)
+                logToFile(`Yaw changed from ${initialYaw.toFixed(2)} to ${bot.entity.yaw.toFixed(2)}`, 'MOVEMENT')
+                await new Promise(resolve => setTimeout(resolve, 500))
+                
+                // Step 3: Back up 3 blocks
+                bot.chat('Backing up...')
+                logToFile('Step 3: Backing up 3 blocks', 'MOVEMENT')
+                bot.setControlState('back', true)
+                await new Promise(resolve => setTimeout(resolve, 1500))
+                bot.setControlState('back', false)
+                logToFile(`Position after backup: x=${bot.entity.position.x.toFixed(2)}, y=${bot.entity.position.y.toFixed(2)}, z=${bot.entity.position.z.toFixed(2)}`, 'MOVEMENT')
+                await new Promise(resolve => setTimeout(resolve, 500))
+                
+                // Step 4: Turn to face door
+                bot.chat('Turning to face door...')
+                logToFile('Step 4: Turning to face door', 'MOVEMENT')
+                await bot.look(bot.entity.yaw + Math.PI, bot.entity.pitch)
+                logToFile(`Final facing yaw: ${bot.entity.yaw.toFixed(2)}`, 'MOVEMENT')
+                await new Promise(resolve => setTimeout(resolve, 500))
+                
+                // Step 5: Open door
+                bot.chat('Opening door...')
+                logToFile('Step 5: Opening door', 'INTERACTION')
+                const doorStateBefore = door.getProperties()
+                logToFile(`Door state before opening: ${JSON.stringify(doorStateBefore)}`, 'STATE')
+                await bot.activateBlock(door)
+                const doorStateAfter = door.getProperties()
+                logToFile(`Door state after opening: ${JSON.stringify(doorStateAfter)}`, 'STATE')
+                await new Promise(resolve => setTimeout(resolve, 500))
+                
+                // Step 6: Walk through
+                bot.chat('Walking through door...')
+                logToFile('Step 6: Walking through doorway', 'MOVEMENT')
+                bot.setControlState('forward', true)
+                await new Promise(resolve => setTimeout(resolve, 2000))
+                bot.setControlState('forward', false)
+                logToFile(`Final position: x=${bot.entity.position.x.toFixed(2)}, y=${bot.entity.position.y.toFixed(2)}, z=${bot.entity.position.z.toFixed(2)}`, 'MOVEMENT')
+                
+                bot.chat('Manual door traversal complete!')
+                logToFile('=== Manual Door Traversal Complete ===', 'SUCCESS')
+                
+            } catch (err) {
+                bot.chat('Error during manual traversal!')
+                logToFile(`Manual traversal error: ${err.message}`, 'ERROR')
+                logToFile(`Error stack: ${err.stack}`, 'ERROR')
+                bot.clearControlStates()
+            }
+        }
+    }
+
+    // Add command handler to bot's chat event
+    bot.on('chat', (username, message) => {
+        if (username === bot.username) return
+        
+        // Check if it's a door command
+        if (bot.doorCommands[message]) {
+            bot.doorCommands[message]()
         }
     })
 }
