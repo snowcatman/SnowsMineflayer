@@ -3,10 +3,23 @@ const fs = require('fs')
 const path = require('path')
 const doorExtract = require('./door_nfo_extract.js')
 
-// Create logs directory in door_nfo_extract folder if it doesn't exist
+// Create logs directory if it doesn't exist
 const logDir = path.join(__dirname, 'logs')
 if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir)
+}
+
+// Backup existing log file if it exists
+const logFile = path.join(logDir, 'door-interact.log')
+if (fs.existsSync(logFile)) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const backupFile = path.join(logDir, `door-interact.${timestamp}.backup.log`)
+    fs.copyFileSync(logFile, backupFile)
+    console.log(`Backed up existing log to: ${backupFile}`)
+    
+    // Clear the current log file
+    fs.writeFileSync(logFile, '')
+    console.log('Cleared current log file')
 }
 
 // Create bot instance

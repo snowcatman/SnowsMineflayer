@@ -14,88 +14,100 @@ function logToFile(message, type = 'INFO') {
 
 function inject(bot) {
     bot.once('spawn', () => {
-        // Get minecraft data with explicit version string
         const version = bot.version
         const data = mcData(version)
-        const mcRegistry = registry(version)  // Initialize registry with version
         
-        // Log what we're working with
         logToFile(`Bot version: ${version}`, 'INFO')
         logToFile(`Loading data for version ${version}`, 'INFO')
         
-        // Get block states directly from mcData
+        // Create a registry object to store extracted data
+        const extractedRegistry = {
+            doors: {},
+            trapdoors: {},
+            metadata: {
+                version: version,
+                extractionDate: new Date().toISOString(),
+                totalDoors: 0,
+                totalTrapdoors: 0
+            }
+        }
+
+        // Get all door and trapdoor blocks
         const doorBlocks = Object.values(data.blocks)
             .filter(block => block.name.includes('door'))
         
-        logToFile(`Found ${doorBlocks.length} door blocks`, 'INFO')
+        logToFile(`Found ${doorBlocks.length} door/trapdoor blocks`, 'INFO')
         
-        // Log door block information
-        doorBlocks.forEach(door => {
-            logToFile(`=== Door Type: ${door.name} ===`, 'INFO')
-            logToFile(`ID: ${door.id}`, 'INFO')
-            logToFile(`Display Name: ${door.displayName}`, 'INFO')
-            if (door.states) {
-                logToFile(`States: ${JSON.stringify(door.states)}`, 'INFO')
+        // Process each door/trapdoor
+        doorBlocks.forEach(block => {
+            const isTrapdoor = block.name.includes('trapdoor')
+            const category = isTrapdoor ? 'trapdoors' : 'doors'
+            
+            // Extract detailed block information
+            const blockInfo = {
+                id: block.id,
+                displayName: block.displayName,
+                name: block.name,
+                hardness: block.hardness,
+                resistance: block.resistance,
+                diggable: block.diggable,
+                material: block.material,
+                transparent: block.transparent,
+                emitLight: block.emitLight,
+                filterLight: block.filterLight,
+                boundingBox: block.boundingBox,
+                states: block.states,
+                defaultState: block.defaultState,
+                minStateId: block.minStateId,
+                maxStateId: block.maxStateId,
+                drops: block.drops,
+                stackSize: block.stackSize
             }
-            if (door.boundingBox) {
-                logToFile(`Bounding Box: ${door.boundingBox}`, 'INFO')
+
+            // Store in registry
+            extractedRegistry[category][block.name] = blockInfo
+
+            // Update counts
+            if (isTrapdoor) {
+                extractedRegistry.metadata.totalTrapdoors++
+            } else {
+                extractedRegistry.metadata.totalDoors++
             }
-            logToFile('=== End Door Type ===', 'INFO')
+
+            // Log detailed information
+            logToFile(`=== ${block.displayName} Properties ===`, 'INFO')
+            Object.entries(blockInfo).forEach(([key, value]) => {
+                if (value !== undefined) {
+                    logToFile(`${key}: ${JSON.stringify(value)}`, 'INFO')
+                }
+            })
         })
 
-        // Get door shapes from registry if available
-        try {
-            const oakDoorId = data.blocksByName.oak_door.id
-            const doorBlock = data.blocks[oakDoorId]
-            
-            if (doorBlock) {
-                logToFile('=== Door Block Data ===', 'INFO')
-                logToFile(`Block ID: ${doorBlock.id}`, 'INFO')
-                logToFile(`Name: ${doorBlock.name}`, 'INFO')
-                logToFile(`Display Name: ${doorBlock.displayName}`, 'INFO')
+        // Save the complete registry to a JSON file for reference
+        const registryPath = path.join('extracted_registry.json')
+        fs.writeFileSync(registryPath, JSON.stringify(extractedRegistry, null, 2))
+        logToFile(`Saved complete registry to ${registryPath}`, 'INFO')
+
+        // Test door interaction capabilities
+        bot.on('blockInteract', (block) => {
+            if (block.name.includes('door')) {
+                logToFile('=== Door Interaction Event ===', 'INTERACTION')
+                logToFile(`Block: ${block.name}`, 'INTERACTION')
+                logToFile(`Position: ${JSON.stringify(block.position)}`, 'INTERACTION')
+                logToFile(`State ID: ${block.stateId}`, 'INTERACTION')
                 
-                // Get states from the block data
-                if (doorBlock.states) {
-                    logToFile('=== Door States ===', 'INFO')
-                    doorBlock.states.forEach(state => {
-                        logToFile(`State Name: ${state.name}`, 'INFO')
-                        logToFile(`Possible Values: ${JSON.stringify(state.values)}`, 'INFO')
-                        logToFile(`Default Value: ${state.default}`, 'INFO')
-                    })
-                }
-                
-                // Get properties if available
-                if (doorBlock.properties) {
-                    logToFile('=== Door Properties ===', 'INFO')
-                    logToFile(JSON.stringify(doorBlock.properties, null, 2), 'INFO')
-                }
-                
-                // Get bounding box
-                if (doorBlock.boundingBox) {
-                    logToFile('=== Door Bounding Box ===', 'INFO')
-                    logToFile(`Type: ${doorBlock.boundingBox}`, 'INFO')
+                // Try to get current state values
+                if (block.getProperties) {
+                    const properties = block.getProperties()
+                    logToFile(`Current Properties: ${JSON.stringify(properties)}`, 'INTERACTION')
                 }
             }
-        } catch (err) {
-            logToFile(`Error getting door data: ${err.message}`, 'WARNING')
-        }
+        })
 
         logToFile('Door information extraction complete', 'INFO')
+        logToFile(`Total doors found: ${extractedRegistry.metadata.totalDoors}`, 'INFO')
+        logToFile(`Total trapdoors found: ${extractedRegistry.metadata.totalTrapdoors}`, 'INFO')
     })
-
-    bot.on('blockInteract', (block) => {
-        if (block.name.includes('door')) {
-            logToFile('=== Door Interaction Event ===', 'INTERACTION')
-            const doorState = bot.doorStates[block.name]
-            if (doorState) {
-                logToFile(`Available door states: ${JSON.stringify(doorState)}`, 'INTERACTION')
-                logToFile(`Current door state: ${block.stateId}`, 'INTERACTION')
-            }
-            // ... rest of existing logging ...
-        }
-    })
-
-    // ... rest of existing code ...
 }
 
 module.exports = inject

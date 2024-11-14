@@ -1,0 +1,1192 @@
+{
+  "doors": {
+    "oak_door": {
+      "id": 178,
+      "displayName": "Oak Door",
+      "name": "oak_door",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 3871,
+      "minStateId": 3860,
+      "maxStateId": 3923,
+      "drops": [
+        657
+      ],
+      "stackSize": 64
+    },
+    "iron_door": {
+      "id": 191,
+      "displayName": "Iron Door",
+      "name": "iron_door",
+      "hardness": 5,
+      "resistance": 5,
+      "diggable": true,
+      "material": "mineable/pickaxe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 4125,
+      "minStateId": 4114,
+      "maxStateId": 4177,
+      "drops": [
+        656
+      ],
+      "stackSize": 64
+    },
+    "spruce_door": {
+      "id": 522,
+      "displayName": "Spruce Door",
+      "name": "spruce_door",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 9566,
+      "minStateId": 9555,
+      "maxStateId": 9618,
+      "drops": [
+        658
+      ],
+      "stackSize": 64
+    },
+    "birch_door": {
+      "id": 523,
+      "displayName": "Birch Door",
+      "name": "birch_door",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 9630,
+      "minStateId": 9619,
+      "maxStateId": 9682,
+      "drops": [
+        659
+      ],
+      "stackSize": 64
+    },
+    "jungle_door": {
+      "id": 524,
+      "displayName": "Jungle Door",
+      "name": "jungle_door",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 9694,
+      "minStateId": 9683,
+      "maxStateId": 9746,
+      "drops": [
+        660
+      ],
+      "stackSize": 64
+    },
+    "acacia_door": {
+      "id": 525,
+      "displayName": "Acacia Door",
+      "name": "acacia_door",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 9758,
+      "minStateId": 9747,
+      "maxStateId": 9810,
+      "drops": [
+        661
+      ],
+      "stackSize": 64
+    },
+    "dark_oak_door": {
+      "id": 526,
+      "displayName": "Dark Oak Door",
+      "name": "dark_oak_door",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 9822,
+      "minStateId": 9811,
+      "maxStateId": 9874,
+      "drops": [
+        662
+      ],
+      "stackSize": 64
+    },
+    "mangrove_door": {
+      "id": 527,
+      "displayName": "Mangrove Door",
+      "name": "mangrove_door",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 9886,
+      "minStateId": 9875,
+      "maxStateId": 9938,
+      "drops": [
+        663
+      ],
+      "stackSize": 64
+    },
+    "crimson_door": {
+      "id": 759,
+      "displayName": "Crimson Door",
+      "name": "crimson_door",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 16747,
+      "minStateId": 16736,
+      "maxStateId": 16799,
+      "drops": [
+        664
+      ],
+      "stackSize": 64
+    },
+    "warped_door": {
+      "id": 760,
+      "displayName": "Warped Door",
+      "name": "warped_door",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "upper",
+            "lower"
+          ]
+        },
+        {
+          "name": "hinge",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "left",
+            "right"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 16811,
+      "minStateId": 16800,
+      "maxStateId": 16863,
+      "drops": [
+        665
+      ],
+      "stackSize": 64
+    }
+  },
+  "trapdoors": {
+    "oak_trapdoor": {
+      "id": 242,
+      "displayName": "Oak Trapdoor",
+      "name": "oak_trapdoor",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 4435,
+      "minStateId": 4420,
+      "maxStateId": 4483,
+      "drops": [
+        667
+      ],
+      "stackSize": 64
+    },
+    "spruce_trapdoor": {
+      "id": 243,
+      "displayName": "Spruce Trapdoor",
+      "name": "spruce_trapdoor",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 4499,
+      "minStateId": 4484,
+      "maxStateId": 4547,
+      "drops": [
+        668
+      ],
+      "stackSize": 64
+    },
+    "birch_trapdoor": {
+      "id": 244,
+      "displayName": "Birch Trapdoor",
+      "name": "birch_trapdoor",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 4563,
+      "minStateId": 4548,
+      "maxStateId": 4611,
+      "drops": [
+        669
+      ],
+      "stackSize": 64
+    },
+    "jungle_trapdoor": {
+      "id": 245,
+      "displayName": "Jungle Trapdoor",
+      "name": "jungle_trapdoor",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 4627,
+      "minStateId": 4612,
+      "maxStateId": 4675,
+      "drops": [
+        670
+      ],
+      "stackSize": 64
+    },
+    "acacia_trapdoor": {
+      "id": 246,
+      "displayName": "Acacia Trapdoor",
+      "name": "acacia_trapdoor",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 4691,
+      "minStateId": 4676,
+      "maxStateId": 4739,
+      "drops": [
+        671
+      ],
+      "stackSize": 64
+    },
+    "dark_oak_trapdoor": {
+      "id": 247,
+      "displayName": "Dark Oak Trapdoor",
+      "name": "dark_oak_trapdoor",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 4755,
+      "minStateId": 4740,
+      "maxStateId": 4803,
+      "drops": [
+        672
+      ],
+      "stackSize": 64
+    },
+    "mangrove_trapdoor": {
+      "id": 248,
+      "displayName": "Mangrove Trapdoor",
+      "name": "mangrove_trapdoor",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 4819,
+      "minStateId": 4804,
+      "maxStateId": 4867,
+      "drops": [
+        673
+      ],
+      "stackSize": 64
+    },
+    "iron_trapdoor": {
+      "id": 412,
+      "displayName": "Iron Trapdoor",
+      "name": "iron_trapdoor",
+      "hardness": 5,
+      "resistance": 5,
+      "diggable": true,
+      "material": "mineable/pickaxe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 8293,
+      "minStateId": 8278,
+      "maxStateId": 8341,
+      "drops": [
+        666
+      ],
+      "stackSize": 64
+    },
+    "crimson_trapdoor": {
+      "id": 751,
+      "displayName": "Crimson Trapdoor",
+      "name": "crimson_trapdoor",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 16351,
+      "minStateId": 16336,
+      "maxStateId": 16399,
+      "drops": [
+        674
+      ],
+      "stackSize": 64
+    },
+    "warped_trapdoor": {
+      "id": 752,
+      "displayName": "Warped Trapdoor",
+      "name": "warped_trapdoor",
+      "hardness": 3,
+      "resistance": 3,
+      "diggable": true,
+      "material": "mineable/axe",
+      "transparent": true,
+      "emitLight": 0,
+      "filterLight": 0,
+      "boundingBox": "block",
+      "states": [
+        {
+          "name": "facing",
+          "type": "enum",
+          "num_values": 4,
+          "values": [
+            "north",
+            "south",
+            "west",
+            "east"
+          ]
+        },
+        {
+          "name": "half",
+          "type": "enum",
+          "num_values": 2,
+          "values": [
+            "top",
+            "bottom"
+          ]
+        },
+        {
+          "name": "open",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "powered",
+          "type": "bool",
+          "num_values": 2
+        },
+        {
+          "name": "waterlogged",
+          "type": "bool",
+          "num_values": 2
+        }
+      ],
+      "defaultState": 16415,
+      "minStateId": 16400,
+      "maxStateId": 16463,
+      "drops": [
+        675
+      ],
+      "stackSize": 64
+    }
+  },
+  "metadata": {
+    "version": "1.19.2",
+    "extractionDate": "2024-11-14T01:07:29.675Z",
+    "totalDoors": 10,
+    "totalTrapdoors": 10
+  }
+}

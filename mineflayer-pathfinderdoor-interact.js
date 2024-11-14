@@ -5,10 +5,21 @@ const Vec3 = require('vec3')                // For 3D position calculations
 const fs = require('fs')                    // For file operations
 const path = require('path')                // For path handling
 
+// Add pathfinding constants
+const PATHFINDING_CONSTANTS = {
+    DOOR_APPROACH_DISTANCE: 3,
+    DOOR_CLEARANCE_DISTANCE: 2,
+    RESUME_DELAY: 500,
+    TICK_LENGTH: 50
+}
+
 // Add door tracking system at the top after imports
 const DoorRegistry = {
     doors: new Map(),
     sessionId: Date.now(), // Unique session identifier
+
+    // Add path memory
+    pathMemory: new Map(),
 
     registerDoor(door) {
         const doorId = this.generateDoorId(door)
@@ -135,6 +146,23 @@ const DoorRegistry = {
             return duration
         }
         return 0
+    },
+
+    storePath(doorId, originalGoal) {
+        this.pathMemory.set(doorId, {
+            goal: originalGoal,
+            timestamp: Date.now()
+        })
+        logToFile(`Stored pathfinding goal for door ${doorId}`, 'PATHFINDING')
+    },
+
+    getStoredPath(doorId) {
+        return this.pathMemory.get(doorId)
+    },
+
+    clearPath(doorId) {
+        this.pathMemory.delete(doorId)
+        logToFile(`Cleared pathfinding memory for door ${doorId}`, 'PATHFINDING')
     }
 }
 
@@ -494,80 +522,28 @@ function inject(bot) {
 
     // Add pathfinding integration
     function addDoorPathfinding(movements) {
-        // Store original getMoveForward
         const originalGetMoveForward = movements.getMoveForward
 
         movements.getMoveForward = function(node, dir, neighbors) {
             const blockC = this.getBlock(node, dir.x, 0, dir.z)
             
-            // If block is a door, handle door traversal
             if (blockC.name && blockC.name.includes('door')) {
-                logToFile('Found door in path', 'PATHFINDING')
+                // Found door in path, switch to smart pathfinding
+                const currentGoal = this.bot.pathfinder.goal
                 
-                // Check door state
-                const doorState = blockC.getProperties()
-                const doorPos = blockC.position
+                logToFile(`Door detected in path:
+                    Position: ${JSON.stringify(blockC.position)}
+                    Current goal: ${JSON.stringify(currentGoal)}`, 'PATHFINDING')
                 
-                // Calculate approach position
-                const approachPos = {
-                    x: node.x,
-                    y: node.y,
-                    z: node.z
-                }
+                // Queue smart pathfinding
+                setTimeout(() => {
+                    smartPathfindThroughDoor(this.bot, currentGoal)
+                }, 0)
                 
-                // Calculate through position
-                const throughPos = {
-                    x: node.x + (dir.x * 2),
-                    y: node.y,
-                    z: node.z + (dir.z * 2)
-                }
-                
-                // Add door traversal sequence
-                neighbors.push({
-                    x: throughPos.x,
-                    y: throughPos.y,
-                    z: throughPos.z,
-                    remainingBlocks: node.remainingBlocks,
-                    cost: 2,  // Higher cost for door traversal
-                    toBreak: [],
-                    toPlace: [],
-                    isDoorMove: true,
-                    doorBlock: blockC,
-                    approachPos: approachPos
-                })
-                
-                logToFile('Added door traversal to path options', 'PATHFINDING')
                 return
             }
             
-            // Use original movement for non-door blocks
             return originalGetMoveForward.call(this, node, dir, neighbors)
-        }
-
-        // Add door movement handler
-        movements.handleDoorMove = async function(node) {
-            if (!node.isDoorMove) return false
-            
-            try {
-                // 1. Move to approach position
-                await bot.lookAt(node.doorBlock.position)
-                
-                // 2. Check and handle door state
-                const doorState = node.doorBlock.getProperties()
-                if (doorState.open === 'false') {
-                    await bot.activateBlock(node.doorBlock)
-                    await new Promise(resolve => setTimeout(resolve, 500))
-                }
-                
-                // 3. Move through while facing forward
-                await bot.lookAt(new Vec3(node.x, node.y, node.z))
-                await bot.pathfinder.goto(new goals.GoalNear(node.x, node.y, node.z, 1))
-                
-                return true
-            } catch (err) {
-                logToFile(`Door movement failed: ${err.message}`, 'ERROR')
-                return false
-            }
         }
     }
 
@@ -905,6 +881,30 @@ function inject(bot) {
             nearbyDoors.forEach((doorInfo, index) => {
                 bot.chat(`${index + 1}. ${doorInfo.label} (${doorInfo.distance.toFixed(1)} blocks away)`)
             })
+        },
+        
+        gotodestination: async function(x, y, z) {
+            const goal = new goals.GoalNear(x, y, z, 1)
+            
+            logToFile(`Starting pathfinding to destination: ${x}, ${y}, ${z}`, 'PATHFINDING')
+            
+            try {
+                await bot.pathfinder.goto(goal)
+                bot.chat('Reached destination!')
+            } catch (err) {
+                if (err.message.includes('door')) {
+                    // Door detected in path, try smart pathfinding
+                    const success = await smartPathfindThroughDoor(bot, goal)
+                    if (success) {
+                        bot.chat('Made it through the door and reached destination!')
+                    } else {
+                        bot.chat('Had trouble with the door along the way.')
+                    }
+                } else {
+                    bot.chat('Could not reach destination!')
+                    logToFile(`Pathfinding failed: ${err.message}`, 'ERROR')
+                }
+            }
         }
     }
 
@@ -923,6 +923,89 @@ function inject(bot) {
         DoorRegistry.clearSession()
         logToFile('Started new door tracking session', 'REGISTRY')
     })
+}
+
+// Add smart pathfinding function
+async function smartPathfindThroughDoor(bot, originalGoal) {
+    const startTime = Date.now()
+    let currentPhase = 'APPROACH'
+    
+    try {
+        // Phase 1: Find and approach door
+        const doorResult = findAndRegisterDoor(bot)
+        if (!doorResult) {
+            throw new Error('No door found in path')
+        }
+        
+        const { door, doorInfo } = doorResult
+        
+        // Store original goal for after door traversal
+        DoorRegistry.storePath(doorInfo.id, originalGoal)
+        
+        logToFile(`Starting door traversal sequence:
+            Phase: ${currentPhase}
+            Door: ${doorInfo.label}
+            Original goal: ${JSON.stringify(originalGoal)}`, 'PATHFINDING')
+
+        // Phase 2: Manual door traversal
+        currentPhase = 'DOOR_HANDLING'
+        await handleDoorTraversal(bot, door, doorInfo)
+
+        // Phase 3: Resume original pathfinding
+        currentPhase = 'RESUME'
+        await resumePathfinding(bot, doorInfo, originalGoal)
+
+        const duration = Date.now() - startTime
+        logToFile(`Completed smart pathfinding:
+            Duration: ${duration}ms
+            Door: ${doorInfo.label}`, 'TIMING')
+        
+        return true
+
+    } catch (err) {
+        logToFile(`Smart pathfinding failed during ${currentPhase}: ${err.message}`, 'ERROR')
+        return false
+    }
+}
+
+// Add door traversal handler
+async function handleDoorTraversal(bot, door, doorInfo) {
+    // Use existing manual traversal code but optimized for pathfinding
+    logToFile(`Starting door traversal for ${doorInfo.label}`, 'MOVEMENT')
+    
+    // Calculate approach position
+    const approachPos = calculateDoorApproach(bot, door)
+    
+    // Move to approach position
+    await bot.pathfinder.goto(new goals.GoalNear(
+        approachPos.x, 
+        approachPos.y, 
+        approachPos.z, 
+        PATHFINDING_CONSTANTS.DOOR_APPROACH_DISTANCE
+    ))
+
+    // Handle door interaction
+    await interactWithDoor(bot, door, doorInfo)
+
+    // Move through doorway
+    const throughPos = calculateThroughPosition(door)
+    await moveThrough(bot, throughPos)
+
+    logToFile(`Completed door traversal for ${doorInfo.label}`, 'MOVEMENT')
+}
+
+// Add pathfinding resume function
+async function resumePathfinding(bot, doorInfo, originalGoal) {
+    // Wait for bot to stabilize after door traversal
+    await new Promise(resolve => setTimeout(resolve, PATHFINDING_CONSTANTS.RESUME_DELAY))
+    
+    logToFile(`Resuming pathfinding after door ${doorInfo.label}`, 'PATHFINDING')
+    
+    // Clear door from memory
+    DoorRegistry.clearPath(doorInfo.id)
+    
+    // Resume original pathfinding
+    return bot.pathfinder.goto(originalGoal)
 }
 
 // Export both the plugin function and logging function
