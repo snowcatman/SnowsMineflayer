@@ -6,6 +6,7 @@ const { pathfinderdoor, logToFile, PositionTracker } = require('./mineflayer-pat
 const fs = require('fs')
 const path = require('path')
 const { watchLogs, aggregateLogs } = require('./AI/log-aggregator.js')
+const GoalHandler = require('./mpi-pdh-goto.js')
 
 // Add getDoorState function
 function getDoorState(door) {
@@ -28,13 +29,24 @@ function logBotFile(message, type = 'INFO') {
 
 // Add this function near the top with other utility functions
 function handleStop(bot) {
+    // Clear pathfinding
     bot.pathfinder.stop()
+    bot.pathfinder.setGoal(null)
+    
+    // Clear movement states
     bot.clearControlStates()
+    
+    // Clear position tracking
     PositionTracker.clearPositions()
+    
+    // Clear any intervals
     if (bot.followIntervals) {
         bot.followIntervals.forEach(interval => clearInterval(interval))
         bot.followIntervals = []
     }
+    
+    // Log the stop
+    logToFile('Bot stopped - all pathfinding and controls cleared', 'MOVEMENT')
 }
 
 // Add this function near other utility functions
@@ -65,9 +77,17 @@ const bot = mineflayer.createBot({
     auth: 'offline'
 })
 
-// Load plugins
+// Load plugins FIRST
 bot.loadPlugin(pathfinder)
-bot.loadPlugin(pathfinderdoor)  // Load our door handling plugin
+bot.loadPlugin(pathfinderdoor)
+
+// THEN initialize goal handler AFTER pathfinder is loaded
+bot.once('spawn', () => {
+    // Initialize goal handler after pathfinder is loaded
+    const goalHandler = new GoalHandler(bot)
+    goalHandler.wrapGoalHandling()
+    console.log('\x1b[32m%s\x1b[0m', 'Bot spawned and ready for commands!')
+})
 
 // Initialize mcData
 let mcData
@@ -116,7 +136,6 @@ const DOOR_INTERACTION = {
 
 // Event handlers
 bot.on('spawn', () => {
-    console.log('\x1b[32m%s\x1b[0m', 'Bot spawned and ready for commands!')
     bot.chat('Door-Bot is online!')
     logServerTime(bot)  // Log initial time
     aggregateLogs()

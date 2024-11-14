@@ -2,6 +2,21 @@ const { Vec3 } = require('vec3')
 const { goals } = require('mineflayer-pathfinder')
 const DoorStateValidator = require('./pathfinder-door-handler-userWatch.js')
 
+// Add these constants at the top
+const MAX_DOOR_ATTEMPTS = 3
+const DOOR_STATE = {
+    attempts: new Map(),  // Track attempts per door
+    playerPassed: new Map(),  // Track if player passed through
+    lastInteraction: new Map()  // Track last interaction time
+}
+
+// Update timing constants to use ticks
+const INTERACTION_DELAYS = {
+    DOOR_COOLDOWN: 20 * 5,    // 5 seconds in ticks (was 5000ms)
+    PLAYER_MEMORY: 20 * 30,   // 30 seconds in ticks (was 30000ms)
+    ATTEMPT_DELAY: 20         // 1 second in ticks (was 1000ms)
+}
+
 class PathfinderDoorHandler {
     constructor(bot) {
         this.bot = bot
@@ -14,6 +29,7 @@ class PathfinderDoorHandler {
         this.doorInteractions = new Map()  // Track door interactions with timestamps
         this.INTERACTION_COOLDOWN = 5000   // 5 second cooldown
         this.lastPathGoal = null  // Track last valid goal
+        this.pathBlocked = new Map()  // Add this to track blocked paths
 
         // Watch for players passing through doors
         this.bot.on('entityMove', (entity) => {
@@ -45,23 +61,30 @@ class PathfinderDoorHandler {
     isDoorPassable(door) {
         const doorId = `${door.position.x},${door.position.y},${door.position.z}`
         
-        // If we recently interacted, trust the current state
-        if (this.doorInteractions.has(doorId)) {
-            console.log('Door was recently interacted with, using current state')
-            const state = this.getDoorState(door)
-            return state && state.isOpen
-        }
-
-        // If a player passed through, consider it passable
+        // First priority: Has a player recently passed through?
         const playerPassed = this.playerPassedDoors.get(doorId)
         if (playerPassed && (Date.now() - playerPassed.timestamp) < 30000) {
-            console.log('Player recently passed through door')
+            console.log('Player recently passed through door - should be passable')
             return true
         }
 
-        // Otherwise check current state
+        // Second priority: Try to physically pass through
+        const canPhysicallyPass = this.bot.entity.position.distanceTo(door.position) < 2 && 
+                                 !this.bot.entity.isCollidedHorizontally
+        if (canPhysicallyPass) {
+            console.log('Can physically pass through door')
+            return true
+        }
+
+        // Last resort: Check door state
         const state = this.getDoorState(door)
-        return state && state.isOpen
+        if (state && state.isOpen) {
+            console.log('Door is open by state')
+            return true
+        }
+
+        console.log('Door is not passable - needs interaction')
+        return false
     }
 
     // Add this method to check if we can interact
@@ -84,54 +107,61 @@ class PathfinderDoorHandler {
         return pos.constructor.name === 'Vec3' ? pos : new Vec3(pos.x, pos.y, pos.z)
     }
 
-    // Modify the inject() method to handle path positions properly
+    // Modify the inject() method to properly handle door states
     inject() {
         const handler = this
         
-        // Add goal validation to pathfinder
-        const originalSetGoal = this.bot.pathfinder.setGoal
-        this.bot.pathfinder.setGoal = function(goal) {
-            this.lastPathGoal = handler.validateGoal(goal)
-            return originalSetGoal.call(this, this.lastPathGoal)
+        // Override the movement's walkability check
+        const originalCanWalkThrough = this.bot.pathfinder.movements.canWalkThrough
+        this.bot.pathfinder.movements.canWalkThrough = function(block) {
+            if (block && block.name && block.name.includes('door')) {
+                // If a player passed through OR door is open, space is walkable
+                const doorId = `${block.position.x},${block.position.y},${block.position.z}`
+                const playerPassed = handler.playerPassedDoors.get(doorId)
+                
+                if (playerPassed && (Date.now() - playerPassed.timestamp) < 30000) {
+                    console.log('Space is walkable - player recently passed')
+                    return true
+                }
+                
+                // Check door state
+                const state = handler.getDoorState(block)
+                if (state && state.isOpen) {
+                    console.log('Space is walkable - door is open')
+                    return true
+                }
+            }
+            return originalCanWalkThrough.call(this, block)
         }
 
         this.bot.pathfinder.movements.getMoveForward = function(node, dir, neighbors) {
-            // Convert node position to Vec3
-            const nodePos = handler.toVec3(node)
-            const blockC = this.getBlock(nodePos, dir.x, 0, dir.z)
+            const blockC = this.getBlock(node, dir.x, 0, dir.z)
             
             if (blockC.name && blockC.name.includes('door')) {
-                // ONLY add as walkable if door is actually passable
-                if (handler.isDoorPassable(blockC)) {
-                    neighbors.push({
-                        x: nodePos.x + dir.x,
-                        y: nodePos.y,
-                        z: nodePos.z + dir.z,
-                        remainingBlocks: node.remainingBlocks,
-                        cost: 1,
-                        toBreak: [],
-                        toPlace: []  // No interaction needed if passable
-                    })
-                    return
+                const doorId = `${blockC.position.x},${blockC.position.y},${blockC.position.z}`
+                const attempts = DOOR_STATE.attempts.get(doorId) || 0
+                
+                // Check attempt limit before adding to path
+                if (attempts >= MAX_DOOR_ATTEMPTS) {
+                    console.log(`Maximum attempts (${MAX_DOOR_ATTEMPTS}) reached for door at ${doorId}`)
+                    return  // Don't add to path
                 }
                 
-                // Only add interaction node if door is closed and we haven't recently interacted
+                // Rest of door handling...
                 if (handler.canInteractWithDoor(blockC)) {
-                    // Record interaction attempt
-                    const doorId = `${blockC.position.x},${blockC.position.y},${blockC.position.z}`
-                    handler.doorInteractions.set(doorId, Date.now())
-                    
+                    console.log(`Door attempt ${attempts + 1}/${MAX_DOOR_ATTEMPTS}`)
+                    DOOR_STATE.attempts.set(doorId, attempts + 1)
                     neighbors.push({
-                        x: nodePos.x + dir.x,
-                        y: nodePos.y,
-                        z: nodePos.z + dir.z,
+                        x: node.x + dir.x,
+                        y: node.y,
+                        z: node.z + dir.z,
                         remainingBlocks: node.remainingBlocks,
                         cost: 2,
                         toBreak: [],
                         toPlace: [{
-                            x: nodePos.x + dir.x,
-                            y: nodePos.y,
-                            z: nodePos.z + dir.z,
+                            x: node.x + dir.x,
+                            y: node.y,
+                            z: node.z + dir.z,
                             dx: 0,
                             dy: 0,
                             dz: 0,
@@ -139,10 +169,9 @@ class PathfinderDoorHandler {
                         }]
                     })
                 }
-                return
             }
-
-            return this.getBlock.call(this, nodePos, dir, neighbors)
+            
+            return this.getBlock.call(this, node, dir, neighbors)
         }.bind(this.bot.pathfinder.movements)
     }
 
@@ -258,27 +287,77 @@ class PathfinderDoorHandler {
     async handleDoor(door) {
         try {
             const doorId = `${door.position.x},${door.position.y},${door.position.z}`
+            const state = this.getDoorState(door)
             
-            // Check if we recently interacted with this door
-            const lastInteraction = this.recentInteractions.get(doorId)
-            if (lastInteraction && (Date.now() - lastInteraction) < 5000) {
-                console.log('Recently interacted with this door, skipping')
+            // Communicate door state first
+            this.bot.chat(`I see a ${state.isOpen ? 'open' : 'closed'} door`)
+            await new Promise(resolve => setTimeout(resolve, 1000))  // Wait 1 second
+            
+            // Check attempt count
+            const attempts = DOOR_STATE.attempts.get(doorId) || 0
+            if (attempts >= MAX_DOOR_ATTEMPTS) {
+                this.bot.chat("I've tried this door several times. I can't get through.")
+                return false
+            }
+
+            // Try to move through first if door is open
+            if (state.isOpen) {
+                this.bot.chat("The door is open, trying to walk through...")
+                await new Promise(resolve => setTimeout(resolve, 1000))
+                
+                // Try to physically move through
+                const canPass = await this.tryPhysicalPass(door)
+                if (!canPass) {
+                    this.bot.chat("Something is blocking me from walking through the open door")
+                    return false
+                }
                 return true
             }
 
-            // Only interact if door is closed and we haven't recently interacted
-            if (!this.getDoorState(door).isOpen) {
-                await this.bot.activateBlock(door)
-                this.recentInteractions.set(doorId, Date.now())
-                // Ensure path positions are Vec3
-                const throughPos = this.toVec3(door.position.offset(0, 0, 1))
-                await new Promise(resolve => setTimeout(resolve, 250))
-                return true
-            }
+            // Door interaction logic
+            DOOR_STATE.attempts.set(doorId, attempts + 1)
+            this.bot.chat(`Attempting to open the door (try ${attempts + 1}/${MAX_DOOR_ATTEMPTS})`)
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            
+            await this.bot.activateBlock(door)
+            await new Promise(resolve => setTimeout(resolve, 20 * 50))  // Wait 20 ticks
             
             return true
         } catch (err) {
+            this.bot.chat("I had trouble with the door")
             return false
+        }
+    }
+
+    // Add this method to check physical movement
+    async tryPhysicalPass(door) {
+        // Get positions
+        const startPos = this.bot.entity.position.clone()
+        const doorPos = door.position.clone()
+        const direction = this.getDoorDirection(door)
+        
+        // Calculate position on other side of door
+        const targetPos = doorPos.offset(direction.x, 0, direction.z)
+        
+        try {
+            // Try to move to the other side
+            await this.bot.pathfinder.goto(new goals.GoalNear(targetPos.x, targetPos.y, targetPos.z, 1))
+            return true
+        } catch (err) {
+            console.log('Failed to pass through door:', err.message)
+            return false
+        }
+    }
+
+    // Add helper to get door direction
+    getDoorDirection(door) {
+        const state = this.getDoorState(door)
+        switch(state.facing) {
+            case 'north': return new Vec3(0, 0, -1)
+            case 'south': return new Vec3(0, 0, 1)
+            case 'east': return new Vec3(1, 0, 0)
+            case 'west': return new Vec3(-1, 0, 0)
+            default: return new Vec3(0, 0, 0)
         }
     }
 
@@ -312,6 +391,92 @@ class PathfinderDoorHandler {
             heuristic: (node) => typeof goal.heuristic === 'function' ? goal.heuristic(node) : 0,
             isEnd: (node) => typeof goal.isEnd === 'function' ? goal.isEnd(node) : false,
             toString: () => goal.toString ? goal.toString() : 'Goal'
+        }
+    }
+
+    // Add this method to PathfinderDoorHandler class
+    wrapPathfinderGoal() {
+        const originalSetGoal = this.bot.pathfinder.setGoal.bind(this.bot.pathfinder)
+        const Vec3 = require('vec3')  // Make sure Vec3 is available
+
+        // Wrap the setGoal to ensure all positions are Vec3
+        this.bot.pathfinder.setGoal = (goal) => {
+            if (goal && goal.path) {
+                // Convert all path positions to Vec3
+                goal.path = goal.path.map(pos => {
+                    if (!pos.minus || typeof pos.minus !== 'function') {
+                        return new Vec3(pos.x, pos.y, pos.z)
+                    }
+                    return pos
+                })
+            }
+            return originalSetGoal(goal)
+        }
+    }
+
+    // Add this method to ensure path points are always Vec3
+    ensurePathFormat(path) {
+        if (!path) return path
+        return path.map(point => {
+            // If it's already a Vec3 with minus function, return as is
+            if (point && typeof point.minus === 'function') return point
+            
+            // If it's our custom path point, convert to Vec3
+            if (point && typeof point.x === 'number') {
+                return new Vec3(point.x, point.y, point.z)
+            }
+            
+            // If it's something else entirely, log and return null
+            console.log('Unexpected path point format:', point)
+            return null
+        }).filter(point => point !== null)
+    }
+
+    // Add method to track player door passages
+    onPlayerNearDoor(player, door) {
+        const doorId = `${door.position.x},${door.position.y},${door.position.z}`
+        DOOR_STATE.playerPassed.set(doorId, {
+            timestamp: Date.now(),
+            player: player.username
+        })
+        console.log(`Tracked player ${player.username} passing through door at ${doorId}`)
+    }
+
+    // Add this method to PathfinderDoorHandler class
+    async handleDoorPathfinding(door) {
+        try {
+            const doorId = `${door.position.x},${door.position.y},${door.position.z}`
+            
+            // Check if this path is already blocked
+            if (this.pathBlocked.get(doorId)) {
+                console.log('Path through this door is blocked - waiting for new command')
+                this.bot.pathfinder.setGoal(null)  // Clear the goal
+                this.bot.pathfinder.stop()
+                this.bot.chat("I need help with this door. Please give me a new command.")
+                return false
+            }
+
+            // Check attempt limit
+            const attempts = DOOR_STATE.attempts.get(doorId) || 0
+            if (attempts >= MAX_DOOR_ATTEMPTS) {
+                console.log(`Maximum attempts (${MAX_DOOR_ATTEMPTS}) reached - stopping pathfinding`)
+                this.bot.chat("I can't get through this door after several attempts. Please help!")
+                this.bot.pathfinder.setGoal(null)  // Clear the goal
+                this.bot.pathfinder.stop()
+                this.pathBlocked.set(doorId, true)
+                DOOR_STATE.attempts.clear()
+                return false
+            }
+
+            // Try to handle the door
+            const success = await this.handleDoor(door)
+            return success
+
+        } catch (err) {
+            console.log('Door pathfinding error:', err.message)
+            this.bot.pathfinder.setGoal(null)  // Clear the goal
+            this.bot.pathfinder.stop()
+            return false
         }
     }
 }
