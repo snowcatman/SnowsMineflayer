@@ -262,16 +262,10 @@ const PositionTracker = {
     }
 }
 
-// Add at top of file after other requires
-const PathfinderDoorHandler = require('./pathfinder-door-handler.js')
-
 // Modify the inject function to handle door registration
 function inject(bot) {
-    // Single door handler instance
-    const doorHandler = new PathfinderDoorHandler(bot)
-
     bot.once('spawn', () => {
-        // Configure movements
+        // Configure door-specific movements
         const movements = new Movements(bot)
         
         // Add ALL door types to interactables and openable sets
@@ -324,11 +318,63 @@ function inject(bot) {
         bot.pathfinder.movements.canOpenDoors = true
         
         logToFile('Added door movement overrides', 'PATHFINDING')
+    })
 
-        // Inject unified door handling
-        doorHandler.inject()
+    // Rest of the inject function...
+}
+
+// Function to write logs to file with timestamp and type
+function logToFile(message, type = 'INFO') {
+    const logMessage = `[${new Date().toISOString()}] [DoorInteract] [${type}] ${message}\n`
+    
+    // Only console.log errors and critical door interactions
+    if (type === 'ERROR' || 
+        (type === 'INTERACTION' && message.includes('Failed to')) ||
+        (type === 'PATHFINDING' && message.includes('Failed to')) ||
+        (type === 'WARNING' && message.includes('door'))) {
+        console.log(logMessage)
+    }
+    
+    // Still write everything to log file
+    fs.appendFileSync(path.join('logs', 'door-interact.log'), logMessage)
+}
+
+// Add position tracking function at the top
+function logBotPosition(bot, message = 'Current position') {
+    logToFile('=== Position Update ===', 'MOVEMENT')
+    logToFile(`${message}:`, 'MOVEMENT')
+    logToFile(`Position: x=${bot.entity.position.x.toFixed(2)}, y=${bot.entity.position.y.toFixed(2)}, z=${bot.entity.position.z.toFixed(2)}`, 'MOVEMENT')
+    logToFile(`Yaw: ${bot.entity.yaw.toFixed(2)}`, 'MOVEMENT')
+    logToFile(`Velocity: x=${bot.entity.velocity.x.toFixed(2)}, y=${bot.entity.velocity.y.toFixed(2)}, z=${bot.entity.velocity.z.toFixed(2)}`, 'MOVEMENT')
+    logToFile('=== End Position Update ===', 'MOVEMENT')
+}
+
+// Main function to inject door functionality into bot
+function inject(bot) {
+    // Wait for registry to be ready
+    bot.once('spawn', () => {
+        // Configure door-specific movements
+        const movements = new Movements(bot)
         
-        logToFile('Door pathfinding modifications applied', 'PATHFINDING')
+        // Critical changes to prevent door breaking
+        movements.canDig = false            // Disable ALL block breaking
+        movements.digCost = Infinity        // Make breaking impossibly expensive
+        movements.canOpenDoors = true       // Enable door interaction
+        movements.allowFreeMotion = false   // Prevent unwanted movements
+        
+        // Add doors to openable set
+        movements.openable = new Set()
+        Object.keys(bot.registry.blocksByName).forEach(blockName => {
+            if (blockName.includes('door') && !blockName.includes('trap')) {
+                movements.openable.add(bot.registry.blocksByName[blockName].id)
+            }
+        })
+
+        // Make door interaction preferred
+        movements.placeCost = 1             // Keep door interaction cost low
+        
+        // Configure pathfinder
+        bot.pathfinder.setMovements(movements)
     })
 
     // Add clean shutdown handling
@@ -497,21 +543,21 @@ function inject(bot) {
                         Position: ${JSON.stringify(doorPos)}
                         State: ${JSON.stringify(getDoorState(door))}
                         Distance: ${bot.entity.position.distanceTo(doorPos)}
-                        In openable set: ${bot.pathfinder.movements.openable.has(door.type)}`, 'PATHFINDING')
+                        Pathable: ${bot.pathfinder.movements.canPassThrough(door)}`, 'PATHFINDING')
                 }
             })
             logToFile('=== End Pathfinding Analysis ===', 'PATHFINDING')
             
             // Add door interaction analysis
-            const interactionDoors = bot.findBlocks({
+            const nearbyDoors = bot.findBlocks({
                 matching: block => block.name.toLowerCase().includes('door'),
                 maxDistance: 5,
                 count: 3
             })
             
-            if (interactionDoors.length > 0) {
+            if (nearbyDoors.length > 0) {
                 logToFile('=== Door Interaction Analysis ===', 'PATHFINDING')
-                interactionDoors.forEach(doorPos => {
+                nearbyDoors.forEach(doorPos => {
                     const door = bot.blockAt(doorPos)
                     if (door) {
                         const doorState = getDoorState(door)
@@ -1105,7 +1151,7 @@ function inject(bot) {
                     const door = bot.blockAt(doorPos)
                     if (door) {
                         const doorState = getDoorState(door)
-                        const canPass = bot.pathfinder.movements.openable.has(door.type)
+                        const canPass = bot.pathfinder.movements.canPassThrough(door)
                         logToFile(`Door analysis:
                             Type: ${door.name}
                             Position: ${JSON.stringify(doorPos)}
@@ -1118,44 +1164,6 @@ function inject(bot) {
                             }`, 'PATHFINDING')
                     }
                 })
-            }
-        }
-    })
-
-    // Add after the existing path_update event handlers
-    bot.on('path_update', async (results) => {
-        if (results.status === 'noPath') {
-            const nearbyDoors = bot.findBlocks({
-                matching: block => block.name.toLowerCase().includes('door'),
-                maxDistance: 5,
-                count: 3
-            })
-
-            if (nearbyDoors.length > 0) {
-                const door = bot.blockAt(nearbyDoors[0])
-                if (door) {
-                    const doorState = getDoorState(door)
-                    if (!doorState.isOpen) {
-                        logToFile('Found closed door in path, attempting to handle', 'PATHFINDING')
-                        
-                        // Get leader position for door traversal
-                        const leader = Object.values(bot.players).find(p => p.entity && p.entity !== bot.entity)
-                        if (leader && leader.entity) {
-                            try {
-                                const success = await doorHandler.handleDoor(door, leader.entity.position)
-                                if (success) {
-                                    logToFile('Successfully handled door, retrying path', 'PATHFINDING')
-                                    // Small delay to let door finish opening
-                                    await new Promise(resolve => setTimeout(resolve, 250))
-                                    // Retry original path
-                                    bot.pathfinder.setGoal(results.path[results.path.length - 1])
-                                }
-                            } catch (err) {
-                                logToFile(`Failed to handle door: ${err.message}`, 'ERROR')
-                            }
-                        }
-                    }
-                }
             }
         }
     })
@@ -1234,38 +1242,9 @@ async function resumePathfinding(bot, doorInfo, originalGoal) {
     return bot.pathfinder.goto(originalGoal)
 }
 
-// Add near the top with other utility functions
-function getDoorState(door) {
-    if (!door) return null
-    const properties = door.getProperties()
-    return {
-        isOpen: properties.open === 'true',
-        facing: properties.facing,
-        half: properties.half,
-        hinge: properties.hinge,
-        powered: properties.powered === 'true'
-    }
-}
-
-// At the top of the file, add logging utility
-function logToFile(message, type = 'INFO') {
-    const logMessage = `[${new Date().toISOString()}] [DoorInteract] [${type}] ${message}\n`
-    
-    // Only log critical events to console
-    if (type === 'ERROR' || 
-        type === 'CRITICAL' || 
-        (type === 'PATHFINDING' && message.includes('Failed to'))) {
-        console.log(logMessage)
-    }
-    
-    // Write to log file
-    fs.appendFileSync(path.join('logs', 'door-interact.log'), logMessage)
-}
-
-// At the end of the file, modify exports
+// Export both the plugin function and logging function
 module.exports = {
     pathfinderdoor: inject,
-    getDoorState: getDoorState,
-    PositionTracker: PositionTracker,
-    logToFile: logToFile
+    logToFile: logToFile,
+    PositionTracker: PositionTracker
 } 
